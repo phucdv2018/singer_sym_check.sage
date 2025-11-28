@@ -1,15 +1,20 @@
 # singer_sym_check.sage
 
-SageMath code accompanying the paper:
+SageMath code accompanying the paper
 
-> A uniform rewriting algorithm for twisted tensor representations of finite classical groups
+> *A uniform rewriting algorithm for twisted tensor representations of finite classical groups*
 
-This script experiments with:
-- Base-\(q\) injectivity \(\Phi: B_C \to \mathbb{Z}/(q^d - 1)\mathbb{Z}\),
-- Model eigenvalues of a Singer cycle on tensor powers \(V^{\otimes K}\),
-- Construction of a real Singer matrix in \(\mathrm{GL}_d(q)\),
-- The induced action on \(\mathrm{Sym}^k(V)\) and its eigenvalues,
-- End-to-end comparison with the digit-vector model.
+This script provides small-scale computational experiments that support the theoretical results in the paper. It includes:
+
+- Exhaustive checks of the base-\(q\) injectivity map
+  \(\Phi: \mathcal{B}_C \to \mathbb{Z}/(q^d - 1)\mathbb{Z}\),
+- A model for eigenvalues of a Singer cycle on tensor powers \(V^{\otimes K}\) via digit vectors,
+- Construction of an explicit Singer matrix in \(\mathrm{GL}_d(q)\) from multiplication by a generator of \(\mathbb{F}_{q^d}^\times\),
+- The induced action of a Singer cycle on \(\mathrm{Sym}^k(V)\) and computation of its eigenvalues over \(\mathbb{F}_{q^d}\),
+- End-to-end comparison between the theoretical digit–vector model and the actual spectrum on \(\mathrm{Sym}^k(V)\),
+- A toy reconstruction experiment for the rewriting step: recovering a matrix \(A \in \mathrm{GL}_2(q)\) (up to scalar) from its symmetric square \(\mathrm{Sym}^2(A)\).
+
+The code is intended as a collection of sanity checks for small parameters and is **not** optimised for large-scale computations.
 
 ## Requirements
 
@@ -17,7 +22,7 @@ This script experiments with:
 
 ## Usage
 
-Run the demo from the command line:
+Run the built-in demo from the command line:
 
 ```bash
 sage singer_sym_check.sage

@@ -4,12 +4,11 @@
 #  - Model eigenvalues on tensor powers V^{⊗ K}
 #  - Real Singer matrix in GL_d(q)
 #  - Real Sym^k(V) action and eigenvalues
-#  - End-to-end comparison with digit-vector theory.
-#
-# This is written for SageMath.
+#  - Recovering A from Sym^2(A) in a toy example (Step 4 demo).
 ############################################################
 
 from itertools import product, permutations
+from collections import Counter
 
 ############################################################
 # 1. Base-q expansion
@@ -122,7 +121,8 @@ def singer_eigenvalues_tensor_power(q, d, K):
     """
     # Finite field GF(q^d)
     Fqd = GF(q**d, 'a')
-    omega = Fqd.gen()  # generator of the field (used as base for exponents)
+    # choose a multiplicative generator of F_{q^d}^*
+    omega = Fqd.multiplicative_generator()
 
     eig = {}
     for c in product(range(K + 1), repeat=d):
@@ -178,13 +178,14 @@ def singer_matrix_GL(q, d):
         - d : positive integer
 
     OUTPUT:
-        - S   : d x d matrix over GF(q) representing multiplication by omega
-        - Fqd : GF(q^d)
-        - omega : generator of Fqd = GF(q^d)
+        - S     : d x d matrix over GF(q) representing multiplication by omega
+        - Fqd   : GF(q^d)
+        - omega : generator of Fqd = GF(q^d)^*
     """
     Fq = GF(q, 'c')
     Fqd = GF(q**d, 'a')
-    omega = Fqd.gen()
+    # multiplicative generator of F_{q^d}^*
+    omega = Fqd.multiplicative_generator()
 
     # Basis {1, omega, omega^2, ..., omega^{d-1}} of F_{q^d} over F_q
     basis = [omega**i for i in range(d)]
@@ -225,8 +226,8 @@ def sym_power_matrix(S, k):
         - k : positive integer
 
     OUTPUT:
-        - M_sym : N x N matrix over F representing Sym^k(S)
-        - sym_tuples : list of sorted k-tuples labelling the basis of Sym^k(V)
+        - M_sym     : N x N matrix over F representing Sym^k(S)
+        - sym_tuples: list of sorted k-tuples labelling the basis of Sym^k(V)
     """
     F = S.base_ring()
     d = S.nrows()
@@ -283,7 +284,8 @@ def check_sym_end_to_end(q, d, k, verbose=True):
       - compute eigenvalues on Sym^k(V) over GF(q^d),
       - compare them with the theoretical eigenvalues
         omega^{sum_i c_i q^i} where c ranges over B_k
-        with sum(c_i) = k.
+        with sum(c_i) = k,
+      - check that all eigenvalues are simple (multiplicity 1).
 
     INPUT:
         - q : prime power
@@ -292,7 +294,8 @@ def check_sym_end_to_end(q, d, k, verbose=True):
         - verbose : whether to print details
 
     OUTPUT:
-        - True if the sets of eigenvalues coincide as expected.
+        - True if the sets of eigenvalues coincide as expected and
+          all eigenvalues are simple.
         - False otherwise.
     """
     if verbose:
@@ -312,17 +315,30 @@ def check_sym_end_to_end(q, d, k, verbose=True):
         print("Sym^k basis index (sorted k-tuples):")
         print(sym_tuples)
 
-    # 3) Extend scalars to GF(q^d) and compute eigenvalues
+    # Check dimension equals number of patterns c with sum(c)=k
+    patterns = [c for c in product(range(k + 1), repeat=d) if sum(c) == k]
+    if verbose:
+        print(f"Number of weight patterns c with sum(c)=k: {len(patterns)}")
+    if len(patterns) != N and verbose:
+        print("WARNING: dim Sym^k(V) != number of weight patterns (unexpected).")
+
+    # 3) Extend scalars to GF(q^d) and compute eigenvalues (with multiplicities)
     M_sym_Fqd = M_sym.change_ring(Fqd)
     eigs = M_sym_Fqd.eigenvalues()
     if verbose:
         print(f"Number of eigenvalues returned (with multiplicity): {len(eigs)}")
 
-    # 4) Theoretical eigenvalues from digit vectors c in B_k
-    patterns = [c for c in product(range(k + 1), repeat=d) if sum(c) == k]
-    if verbose:
-        print(f"Number of weight patterns c with sum(c)=k: {len(patterns)}")
+    # Check multiplicities explicitly
+    mults = Counter(eigs)
+    if not all(m == 1 for m in mults.values()):
+        if verbose:
+            print("WARNING: some eigenvalues have multiplicity > 1.")
+        return False
+    else:
+        if verbose:
+            print("All eigenvalues have multiplicity 1 (simple spectrum).")
 
+    # 4) Theoretical eigenvalues from digit vectors c in B_k
     eig_model = [
         omega**sum(c[i] * (q**i) for i in range(d))
         for c in patterns
@@ -339,7 +355,7 @@ def check_sym_end_to_end(q, d, k, verbose=True):
     if set_real == set_model and len(set_real) == len(patterns):
         if verbose:
             print("SUCCESS: Eigenvalues on Sym^k(V) match the digit-vector model.")
-        # Optionally: print an example exponent/digit.
+        # Example exponent/digits
         lam_example = next(iter(set_real))
         E_ex, digits_ex = exponent_and_digits(lam_example, omega, q, d)
         if verbose:
@@ -349,12 +365,181 @@ def check_sym_end_to_end(q, d, k, verbose=True):
         return True
     else:
         if verbose:
-            print("WARNING: Eigenvalues sets do NOT match as expected.")
+            print("WARNING: Eigenvalue sets do NOT match as expected.")
         return False
 
 
 ############################################################
-# 8. Simple demo / sanity checks
+# 8. Toy model for Step 4:
+#    Recover A from Sym^2(A) in dimension d = 2
+############################################################
+
+def sym2_matrix_from_A(A):
+    r"""
+    Compute the matrix of Sym^2(A) for A in GL_2(F),
+    using explicit polynomial formulas.
+
+    Basis of Sym^2(V) is:
+        v1 = e_0 ⊗ e_0,
+        v2 = e_0 ⊗ e_1 + e_1 ⊗ e_0,
+        v3 = e_1 ⊗ e_1.
+
+    For A = [[a,b],[c,d]], in characteristic != 2 we have:
+
+        A.v1 = a^2 v1 + a c v2 + c^2 v3,
+        A.v3 = b^2 v1 + b d v2 + d^2 v3,
+        A.v2 = 2 a b v1 + 2(a d + b c) v2 + 2 c d v3.
+
+    We build the 3x3 matrix M with these columns.
+    """
+    F = A.base_ring()
+    if F.characteristic() == 2:
+        raise ValueError("sym2_matrix_from_A assumes char(F) != 2.")
+
+    a, b = A[0, 0], A[0, 1]
+    c, d = A[1, 0], A[1, 1]
+    two = F(2)
+
+    col1 = vector(F, [a*a, a*c, c*c])
+    col3 = vector(F, [b*b, b*d, d*d])
+    col2 = vector(F, [two*a*b, two*(a*d + b*c), two*c*d])
+
+    M = matrix(F, 3, 3)
+    M.set_column(0, col1)
+    M.set_column(1, col2)
+    M.set_column(2, col3)
+    return M
+
+
+def recover_A_from_sym2_bruteforce(M):
+    r"""
+    Given M = Sym^2(A) for some A in GL_2(F) over a finite field F
+    of odd characteristic, try to recover A up to scalar multiples.
+
+    We do this by brute force over all A in GL_2(F), using the explicit
+    formula for Sym^2(A) in dimension 2. This is purely experimental and
+    intended as a toy model of Step 4 (solving polynomial equations),
+    not as an efficient algorithm.
+
+    INPUT:
+        - M : 3x3 matrix over a finite field F
+
+    OUTPUT:
+        - list of candidate matrices A such that Sym^2(A) = M
+    """
+    F = M.base_ring()
+    q = F.order()
+    if F.characteristic() == 2:
+        raise ValueError("recover_A_from_sym2_bruteforce assumes char(F) != 2.")
+
+    candidates = []
+    for a in F:
+        for b in F:
+            for c in F:
+                for d in F:
+                    A = matrix(F, 2, 2, [[a, b], [c, d]])
+                    if A.det() == 0:
+                        continue
+                    M_test = sym2_matrix_from_A(A)
+                    if M_test == M:
+                        candidates.append(A)
+
+    return candidates
+
+
+def are_scalar_multiples(A, B):
+    r"""
+    Test whether 2x2 matrices A and B over a field are equal up to a nonzero scalar.
+
+    Return True if there exists lambda != 0 in the base field such that B = lambda * A.
+    """
+    F = A.base_ring()
+    assert B.base_ring() == F
+    # find first nonzero entry of A
+    idx = None
+    for i in range(A.nrows()):
+        for j in range(A.ncols()):
+            if A[i, j] != 0:
+                idx = (i, j)
+                break
+        if idx is not None:
+            break
+    if idx is None:
+        # A is the zero matrix, but we don't consider this case in GL_2
+        return False
+
+    i0, j0 = idx
+    if B[i0, j0] == 0:
+        return False
+    lam = B[i0, j0] / A[i0, j0]
+
+    # check all entries
+    for i in range(A.nrows()):
+        for j in range(A.ncols()):
+            if lam * A[i, j] != B[i, j]:
+                return False
+    return True
+
+
+def check_recover_A_from_sym2(q, trials=5, verbose=True):
+    r"""
+    Experimental check of recovering A from Sym^2(A) in GL_2(q).
+
+    For each trial:
+        - pick a random A in GL_2(q),
+        - compute M = Sym^2(A) via explicit formulas,
+        - run recover_A_from_sym2_bruteforce(M),
+        - check that among the candidates there is some A_hat that
+          is a scalar multiple of A.
+
+    This demonstrates, in a small 2-dimensional case, the idea of
+    Step 4: reconstructing the underlying matrix from its action on
+    a polynomial module by solving a system of polynomial equations.
+    """
+    F = GF(q, 'c')
+    if F.characteristic() == 2:
+        raise ValueError("check_recover_A_from_sym2 is intended for odd q.")
+
+    if verbose:
+        print(f"\n=== Check recovering A from Sym^2(A) in GL_2({q}) ===")
+
+    success = True
+    for t in range(trials):
+        # random invertible A
+        while True:
+            A = random_matrix(F, 2, 2)
+            if A.det() != 0:
+                break
+
+        M = sym2_matrix_from_A(A)
+        candidates = recover_A_from_sym2_bruteforce(M)
+        if verbose:
+            print(f"\nTrial {t+1}:")
+            print("A =")
+            print(A)
+            print(f"Number of candidates found: {len(candidates)}")
+
+        found = False
+        for Ah in candidates:
+            if are_scalar_multiples(A, Ah):
+                found = True
+                if verbose:
+                    print("Found candidate A_hat scalar multiple of A:")
+                    print(Ah)
+                break
+
+        if not found:
+            success = False
+            if verbose:
+                print("WARNING: no scalar-multiple candidate found for this A.")
+
+    if success and verbose:
+        print("All trials succeeded: A recovered up to scalar from Sym^2(A).")
+    return success
+
+
+############################################################
+# 9. Simple demo / sanity checks
 ############################################################
 
 def demo():
@@ -364,6 +549,7 @@ def demo():
       - Check base-q injectivity for some (q,d,C).
       - Compute model eigenvalues for V^{⊗ K} and verify injectivity.
       - Run end-to-end checks for Sym^k(V) with real Singer matrices.
+      - Run a toy Step-4 test: recover A from Sym^2(A) in dimension 2.
     """
     print("=== Demo: Base-q injectivity ===")
     q = 7
@@ -387,7 +573,7 @@ def demo():
     some_c = next(iter(eig.keys()))
     lam = eig[some_c]
     Fqd = lam.parent()
-    omega = Fqd.gen()
+    omega = Fqd.multiplicative_generator()
     E, digits = exponent_and_digits(lam, omega, q, d)
 
     print("\nExample weight pattern c =", some_c)
@@ -401,6 +587,10 @@ def demo():
     for k in [2, 3]:
         ok = check_sym_end_to_end(q, d, k, verbose=True)
         print(f"End-to-end check for Sym^{k}(V):", "OK" if ok else "FAILED")
+
+    # Toy Step-4 test: recover A from Sym^2(A) in GL_2(q)
+    print("\n=== Step-4 toy test: recover A from Sym^2(A) in GL_2(q) ===")
+    check_recover_A_from_sym2(q=7, trials=3, verbose=True)
 
 
 # If you run this file as a script in Sage, run the demo.
